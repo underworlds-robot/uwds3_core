@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+  <arg name="camera_info_topic" default="head_mount_kinect2/qhd/camera_info"/>
+  <arg name="rgb_image_topic" default="head_mount_kinect2/qhd/image_color"/>
+  <arg name="depth_image_topic" default="head_mount_kinect2/qhd/image_depth_rect"/>
+
+  <arg name="robot_cad_models_dir" default="/opt/share/ros/kinetic/share/"/>
+  <arg name="objects_cad_models_dir" default="$(find uwds3_data)/cad_models/"/>
+
+  <arg name="robot_urdf_file_path" default="$(find uwds3_data)/cad_models/pr2/pr2.urdf"/>
+
+  <arg name="global_frame_id" default="map"/>
+  <arg name="base_frame_id" default="base_footprint"/>
+
+  <arg name="position_tolerance" default="0.01"/>
+  <arg name="velocity_tolerance" default="0.05"/>
+
+  <arg name="detector_model_filename" default="$(find uwds3_data)/dnn_models/detection/ssd_mobilenet_v2_coco_2018_03_29.pb"/>
+  <arg name="detector_weights_filename" default="$(find uwds3_data)/dnn_models/detection/ssd_mobilenet_v2_coco_2018_03_29.pbtxt"/>
+  <arg name="detector_config_filename" default="$(find uwds3_data)/config/detection/mscoco_config.yaml"/>
+
+  <arg name="shape_predictor_config_filename" default="$(find uwds3_data)/dnn_models/estimation/shape_predictor_68_face_landmarks.dat"/>
+
+  <arg name="use_gui" default="false"/>
+
+  <node name="underworlds_core" pkg="uwds3_core" type="uwds3_core_node.py" args="" output="screen" respawn="false">
+    <rosparam subst_value="true">
+      camera_info_topic: $(arg camera_info_topic)
+      rgb_image_topic: $(arg rgb_image_topic)
+      depth_image_topic: $(arg depth_image_topic)
+      robot_urdf_file_path: $(arg robot_urdf_file_path)
+      robot_cad_models_dir: $(arg robot_cad_models_dir)
+      objects_cad_models_dir: $(arg objects_cad_models_dir)
+      detector_model_filename: $(arg detector_model_filename)
+      detector_weights_filename: $(arg detector_weights_filename)
+      detector_config_filename: $(arg detector_config_filename)
+      shape_predictor_config_filename: $(arg shape_predictor_config_filename)
+      base_frame_id: $(arg base_frame_id)
+      global_frame_id: $(arg global_frame_id)
+      position_tolerance: $(arg position_tolerance)
+      velocity_tolerance: $(arg velocity_tolerance)
+      use_gui: $(arg use_gui)
+    </rosparam>
+  </node>
+
+</launch>
