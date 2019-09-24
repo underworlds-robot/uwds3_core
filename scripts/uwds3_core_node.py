@@ -7,7 +7,7 @@ from tf2_ros import Buffer, TransformListener
 import numpy as np
 from sensor_msgs.msg import CameraInfo, Image, JointState
 from uwds3_msgs.msg import SceneChangesStamped
-from uwds_core.underworlds_core import UnderworldsCore
+from uwds3_core.underworlds_core import UnderworldsCore
 import message_filters
 import sensor_msgs
 
