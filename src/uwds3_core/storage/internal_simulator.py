@@ -9,6 +9,8 @@ import sensor_msgs
 from tf2_ros import Buffer, TransformListener
 from pybullet import JOINT_FIXED
 
+from image_geometry import PinholeCameraModel
+
 
 class ObjectPhysicalState(object):
     INCONSISTENT = 0
@@ -229,9 +231,59 @@ class InternalSimulator(object):
     def get_robot_reachability(self):
         pass
 
-    def get_human_visibilities(self, id, focus_distance):
-        camera_position = self.get_entity_position(id)
-        if self.camera_info_received is True:
-            pass
-        else:
-            return False, []
+    # def get_pointcloud_from_camera(self, t, q, max_range, width, height):
+    #     rotation_matrix = np.array(p.getMatrixFromQuaternion(q)).reshape(3,3)
+    #     #print(rotation_matrix)
+    #     rotated_frame = rotation_matrix.dot(np.eye(3))
+    #     forward_vector = rotated_frame[:,0]
+    #     yaw_vector = rotated_frame[:,2]
+    #     camera_target = np.array(t) + forward_vector * max_range
+    #
+    #     #view_matrix = p.computeViewMatrix(t, camera_target, yaw_vector)
+    #     #inv_view_matrix = np.linalg.inv(np.reshape(view_matrix, (4,4)))
+    #
+    #     fov = 60.0
+    #     aspect = 1.3333
+    #     clipnear = 0.3
+    #     clipfar = 100.0
+    #     projection_matrix = p.computeProjectionMatrixFOV(fov, aspect, clipnear, clipfar)
+    #     camera_image = p.getCameraImage(width, height, view_matrix, projection_matrix, renderer=p.ER_TINY_RENDERER)
+    #     # TODO: change??
+    #     depth_tiny = camera_image[3] #(self.clipfar * self.clipnear) / (self.clipfar - (self.clipfar - self.clipnear) *
+    #
+    #     point_clouds = {}
+    #
+    #     pinhole_camera_model = PinholeCameraModel()
+    #     pinhole_camera_model.fromCameraInfo(self.camera_info)
+    #
+    #     for v in range(height):
+    #         #v_norm = v / float(height)
+    #         for u in range(width):
+    #             #u_norm = u / float(width)
+    #             object_id = camera_image[4][v, u]
+    #             pt3d = np.array(pinhole_camera_model.projectPixelTo3dRay((u, v))) * depth_tiny[v, u]
+    #
+    #             if u == width / 2. and v == height / 2.:
+    #                 center_element = object_id
+    #                 center_point = pt3d
+    #                 # Pybullet call
+    #                 #p.addUserDebugLine(t, [pt3d[0], pt3d[1], pt3d[2]], [1, 0, 0])
+    #                 continue
+    #             else:
+    #                 # Pybullet call
+    #                 #p.addUserDebugLine(t, [pt3d[0], pt3d[1], pt3d[2]], [0, 0, 1])
+    #
+    #             if object_id not in point_clouds.keys():
+    #                 point_clouds[object_id] = []
+    #
+    #             point_clouds[object_id].append(list(pt3d) + [1]) # 1 is intensity
+    #
+    #     return point_clouds, center_element, center_point
+    #
+    # def get_human_visibilities(self, t, q, focus_distance=1.0):
+    #     #camera_position = self.get_entity_position(id)
+    #     if self.camera_info_received is True:
+    #         flag, visibilities, _ = self.get_pointcloud_from_camera(t, q, 10, 8, 8)
+    #         return flag, visibilities
+    #     else:
+    #         return False, []

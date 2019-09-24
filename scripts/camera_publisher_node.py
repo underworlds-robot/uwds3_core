@@ -24,7 +24,7 @@ class CameraPublisher(object):
         self.camera_info = sensor_msgs.msg.CameraInfo()
         self.camera_info_publisher = rospy.Publisher(self.camera_info_topic, sensor_msgs.msg.CameraInfo, queue_size=1)
 
-        self.camera_frame_id = rospy.get_param("camera_frame_id", "camera_link")
+        self.camera_frame_id = rospy.get_param("~camera_frame_id", "camera_link")
         self.camera_info.header.frame_id = self.camera_frame_id
 
         self.capture = cv2.VideoCapture(0)

@@ -11,7 +11,7 @@ class HeadPoseEstimator(object):
                                     [-225.0, 170.0, -135.0], # left eye corner
                                     [225.0, 170.0, -135.0], # right eye corner
                                     [-150.0, -150.0, -125.0], # left mouth corner
-                                    [150.0, -150.0, -125.0]]) / 4.7 # right mouth corner
+                                    [150.0, -150.0, -125.0]]) / 1000 # right mouth corner
 
     def estimate(self, shape, camera_matrix, dist_coeffs):
         points_2d = np.float32([[shape[NOSE][0], shape[NOSE][1]],

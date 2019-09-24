@@ -3,7 +3,7 @@
 
   <arg name="camera_info_topic" default="head_mount_kinect2/qhd/camera_info"/>
   <arg name="rgb_image_topic" default="head_mount_kinect2/qhd/image_color"/>
-  <arg name="camera_frame_id" default="head_mount_kinect2"/>
+  <arg name="camera_frame_id" default="head_mount_kinect2_rgb_optical_frame"/>
   <arg name="camera_pub_frequency" default="15.0"/>
 
   <node name="camera_publisher" pkg="uwds3_core" type="camera_publisher_node.py" args="" output="screen" respawn="false">

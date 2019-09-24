@@ -6,7 +6,8 @@ import math
 import cv2
 import message_filters
 from cv_bridge import CvBridge
-from tf2_ros import Buffer, TransformListener
+import geometry_msgs
+from tf2_ros import Buffer, TransformListener, TransformBroadcaster
 from .utils.transformations import *
 from .detection.opencv_dnn_detector import OpenCVDNNDetector
 from .detection.hog_face_detector import HOGFaceDetector
@@ -30,6 +31,7 @@ class UnderworldsCore(object):
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer)
+        self.tf_broadcaster = TransformBroadcaster()
 
         self.rgb_image_topic = rospy.get_param("~rgb_image_topic", "/camera/rgb/image_raw")
         self.depth_image_topic = rospy.get_param("~depth_image_topic", "/camera/depth/image_raw")
@@ -149,24 +151,60 @@ class UnderworldsCore(object):
                         for (x, y) in shape:
                             cv2.circle(viz_frame, (x, y), 1, (0, 255, 0), -1)
                         success, rot, trans = self.head_pose_estimator.estimate(shape, self.camera_matrix, self.dist_coeffs)
+                        if not success:
+                            rospy.logwarn("head pose estimation failed")
+                        else:
+                            print rgb_image.shape
+                            print((rot, trans))
+                            transform = geometry_msgs.msg.TransformStamped()
+                            transform.header.stamp = rospy.Time.now()
+                            transform.header.frame_id = self.camera_frame_id
+                            transform.child_frame_id = "gaze"
+                            transform.transform.translation.x = trans[0]
+                            transform.transform.translation.y = trans[1]
+                            transform.transform.translation.z = trans[2]
+                            q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
+                            transform.transform.rotation.x = q_rot[0]
+                            transform.transform.rotation.y = q_rot[1]
+                            transform.transform.rotation.z = q_rot[2]
+                            transform.transform.rotation.w = q_rot[3]
+                            print transform
+                            self.tf_broadcaster.sendTransform(transform)
                         #offset = euler_matrix(math.radians(0), math.radians(0), math.radians(0), "rxyz")
                         #head_pose_rot = inverse_matrix(euler_matrix(rot[0], rot[1], rot[2], 'rxyz'))
                         #new_rot = euler_from_matrix(head_pose_rot, "rxyz")
                         #head_pose_offset = np.dot(head_pose_transform, offset)
                         #_, _, new_rot, new_trans, _ = decompose_matrix(head_pose_transform)
-                        cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 30)
-                        _, t, q = self.get_last_transform_from_tf2(self.global_frame_id, self.camera_frame_id)
-                        view_matrix = transformation_matrix(t, q)
-                        head_pose_transform = compose_matrix(angles=[rot[0], rot[1], rot[2]], translate=[trans[0], trans[1], trans[2]])
-                        head_pose_world = np.dot(view_matrix, head_pose_transform)
-                        _, _, r, t, _ = decompose_matrix(head_pose_world)
-                        q = quaternion_from_euler(r[0], r[1], r[2], "rxyz")
-                        if track.uuid not in self.internal_simulator:
-                            rospy.loginfo("load_urdf")
-                            self.internal_simulator.load_urdf(track.uuid, "face.urdf", t, q)
-                        else:
-                            rospy.loginfo("update_entity")
-                            self.internal_simulator.update_entity(track.uuid, t, q)
+                        cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 0.3)
+                        # success, t, q = self.get_last_transform_from_tf2(self.global_frame_id, self.camera_frame_id)
+                        # if success is True:
+                        #     view_matrix = transformation_matrix(t, q)
+                        #     #print view_matrix
+                        #     #print self.camera_matrix
+                        #     head_pose_transform = compose_matrix(angles=[rot[0], rot[1], rot[2]], translate=[trans[0], trans[1], trans[2]])
+                        #     head_pose_world = np.dot(view_matrix, head_pose_transform)
+                        #     _, _, r, t, _ = decompose_matrix(head_pose_world)
+                        #     q = quaternion_from_euler(r[0], r[1], r[2], "rxyz")
+                        #     transform = geometry_msgs.msg.TransformStamped()
+                        #     transform.header.stamp = rospy.Time.now()
+                        #     transform.header.frame_id = self.camera_frame_id
+                        #     transform.child_frame_id = "gaze"
+                        #     transform.transform.translation.x = trans[0]
+                        #     transform.transform.translation.x = trans[1]
+                        #     transform.transform.translation.x = trans[2]
+                        #     q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
+                        #     transform.transform.rotation.x = q_rot[0]
+                        #     transform.transform.rotation.y = q_rot[1]
+                        #     transform.transform.rotation.z = q_rot[2]
+                        #     transform.transform.rotation.w = q_rot[3]
+                        #     self.tf_broadcaster.sendTransform(transform)
+                            #self.internal_simulator.get_human_visibilities(t, q)
+                        # if track.uuid not in self.internal_simulator:
+                        #     rospy.loginfo("load_urdf")
+                        #     self.internal_simulator.load_urdf(track.uuid, "face.urdf", t, q)
+                        # else:
+                        #     rospy.loginfo("update_entity")
+                        #     self.internal_simulator.update_entity(track.uuid, t, q)
 
                         #self.internal_simulator.load_urdf(t.uuid, "face.urdf", t, q)
                             # success, t, q = self.get_last_transform_from_tf2(self.global_frame_id, self.camera_frame_id)
