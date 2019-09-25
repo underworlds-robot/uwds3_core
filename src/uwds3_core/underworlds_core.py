@@ -17,6 +17,7 @@ from .estimation.facial_landmarks_estimator import FacialLandmarksEstimator, NOS
 from .estimation.head_pose_estimator import HeadPoseEstimator
 from .features.visual_features_extractor import VisualFeaturesExtractor
 from .tracking.tracker import Tracker
+from .tracking.human_tracker import HumanTracker
 from .tracking.linear_assignment import iou_distance
 
 def transformation_matrix(t, q):
@@ -62,9 +63,6 @@ class UnderworldsCore(object):
         self.internal_simulator = InternalSimulator()
 
         self.shape_predictor_config_filename = rospy.get_param("~shape_predictor_config_filename", "")
-        self.landmark_estimator = FacialLandmarksEstimator(self.shape_predictor_config_filename)
-
-        self.head_pose_estimator = HeadPoseEstimator()
 
         self.optical_flow_estimator = DenseOpticalFlowEstimator()
 
@@ -72,7 +70,11 @@ class UnderworldsCore(object):
 
         self.bridge = CvBridge()
 
-        self.tracker = Tracker(iou_distance, min_distance=0.7)
+        self.body_parts = ["person", "face", "right_hand", "left_hand"]
+
+        self.object_tracker = Tracker(iou_distance, min_distance=0.7)
+
+        self.human_tracker = HumanTracker(self.shape_predictor_config_filename)
 
         self.use_depth = rospy.get_param("~use_depth", False)
 
@@ -82,6 +84,7 @@ class UnderworldsCore(object):
         self.only_faces = rospy.get_param("~only_faces", True)
 
         self.visualization_publisher = rospy.Publisher("uwds3_core/visualization_image", sensor_msgs.msg.Image, queue_size=1)
+        self.previous_head_pose = {}
 
         if self.use_depth is True:
             self.rgb_image_sub = message_filters.Subscriber(self.rgb_image_topic, sensor_msgs.msg.Image)
@@ -134,82 +137,48 @@ class UnderworldsCore(object):
             if self.frame_count % self.n_frame == 0:
                 detections = self.face_detector.detect(rgb_image)
             if self.frame_count % self.n_frame == 1:
-                    detections += self.detector.detect(rgb_image)
+                detections = self.detector.detect(rgb_image)
             self.frame_count += 1
-            tracks = self.tracker.update(rgb_image, detections)
+
+            human_detections = [d for d in detections if d.class_label in self.body_parts]
+            object_detections = [d for d in detections if d.class_label not in self.body_parts]
+
+            object_tracks = self.object_tracker.update(rgb_image, object_detections)
+            human_tracks = self.human_tracker.update(rgb_image, human_detections)
 
             fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer1)
             detection_fps = "Detection and track fps : %0.4fhz" % fps
             #print(detection_fps)
+
+
             cv2.putText(viz_frame, detection_fps, (5, 25),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            for track in tracks:
+            for track in human_tracks:
                 if track.is_confirmed():
                     tl_corner = (int(track.bbox.left()), int(track.bbox.top()))
                     br_corner = (int(track.bbox.right()), int(track.bbox.bottom()))
-                    if track.class_label == "face":
-                        shape = self.landmark_estimator.estimate(rgb_image, (int(track.bbox.left()), int(track.bbox.top()), int(track.bbox.right()), int(track.bbox.bottom())))
-                        for (x, y) in shape:
-                            cv2.circle(viz_frame, (x, y), 1, (0, 255, 0), -1)
-                        success, rot, trans = self.head_pose_estimator.estimate(shape, self.camera_matrix, self.dist_coeffs)
-                        if not success:
-                            rospy.logwarn("head pose estimation failed")
-                        else:
-                            print rgb_image.shape
-                            print((rot, trans))
-                            transform = geometry_msgs.msg.TransformStamped()
-                            transform.header.stamp = rospy.Time.now()
-                            transform.header.frame_id = self.camera_frame_id
-                            transform.child_frame_id = "gaze"
-                            transform.transform.translation.x = trans[0]
-                            transform.transform.translation.y = trans[1]
-                            transform.transform.translation.z = trans[2]
-                            q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
-                            transform.transform.rotation.x = q_rot[0]
-                            transform.transform.rotation.y = q_rot[1]
-                            transform.transform.rotation.z = q_rot[2]
-                            transform.transform.rotation.w = q_rot[3]
-                            print transform
-                            self.tf_broadcaster.sendTransform(transform)
-                        #offset = euler_matrix(math.radians(0), math.radians(0), math.radians(0), "rxyz")
-                        #head_pose_rot = inverse_matrix(euler_matrix(rot[0], rot[1], rot[2], 'rxyz'))
-                        #new_rot = euler_from_matrix(head_pose_rot, "rxyz")
-                        #head_pose_offset = np.dot(head_pose_transform, offset)
-                        #_, _, new_rot, new_trans, _ = decompose_matrix(head_pose_transform)
-                        cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 0.3)
-                        # success, t, q = self.get_last_transform_from_tf2(self.global_frame_id, self.camera_frame_id)
-                        # if success is True:
-                        #     view_matrix = transformation_matrix(t, q)
-                        #     #print view_matrix
-                        #     #print self.camera_matrix
-                        #     head_pose_transform = compose_matrix(angles=[rot[0], rot[1], rot[2]], translate=[trans[0], trans[1], trans[2]])
-                        #     head_pose_world = np.dot(view_matrix, head_pose_transform)
-                        #     _, _, r, t, _ = decompose_matrix(head_pose_world)
-                        #     q = quaternion_from_euler(r[0], r[1], r[2], "rxyz")
-                        #     transform = geometry_msgs.msg.TransformStamped()
-                        #     transform.header.stamp = rospy.Time.now()
-                        #     transform.header.frame_id = self.camera_frame_id
-                        #     transform.child_frame_id = "gaze"
-                        #     transform.transform.translation.x = trans[0]
-                        #     transform.transform.translation.x = trans[1]
-                        #     transform.transform.translation.x = trans[2]
-                        #     q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
-                        #     transform.transform.rotation.x = q_rot[0]
-                        #     transform.transform.rotation.y = q_rot[1]
-                        #     transform.transform.rotation.z = q_rot[2]
-                        #     transform.transform.rotation.w = q_rot[3]
-                        #     self.tf_broadcaster.sendTransform(transform)
-                            #self.internal_simulator.get_human_visibilities(t, q)
-                        # if track.uuid not in self.internal_simulator:
-                        #     rospy.loginfo("load_urdf")
-                        #     self.internal_simulator.load_urdf(track.uuid, "face.urdf", t, q)
-                        # else:
-                        #     rospy.loginfo("update_entity")
-                        #     self.internal_simulator.update_entity(track.uuid, t, q)
+                    # if track.class_label == "face":
+                    #     shape = self.landmark_estimator.estimate(rgb_image, track)
+                    #     for (x, y) in shape:
+                    #         cv2.circle(viz_frame, (x, y), 1, (0, 255, 0), -1)
 
-                        #self.internal_simulator.load_urdf(t.uuid, "face.urdf", t, q)
-                            # success, t, q = self.get_last_transform_from_tf2(self.global_frame_id, self.camera_frame_id)
-                            # if success:
-                            #     q = quaternion_from_matrix(rot)
+                    rot, trans = track.get_head_pose()
+                    transform = geometry_msgs.msg.TransformStamped()
+                    transform.header.stamp = rospy.Time.now()
+                    transform.header.frame_id = self.camera_frame_id
+                    transform.child_frame_id = "gaze"
+                    transform.transform.translation.x = trans[0]
+                    transform.transform.translation.y = trans[1]
+                    transform.transform.translation.z = trans[2]
+                    q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
+                    transform.transform.rotation.x = q_rot[0]
+                    transform.transform.rotation.y = q_rot[1]
+                    transform.transform.rotation.z = q_rot[2]
+                    transform.transform.rotation.w = q_rot[3]
+                        #print transform
+                    self.tf_broadcaster.sendTransform(transform)
+                            #self.internal_simulator.get_human_visibilities(trans.reshape((3,)), q_rot)
+                    cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 0.03)
+
 
                     cv2.putText(viz_frame, track.uuid[:6], (tl_corner[0]+5, tl_corner[1]+25),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)
                     cv2.putText(viz_frame, track.class_label, (tl_corner[0]+5, tl_corner[1]+45),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)

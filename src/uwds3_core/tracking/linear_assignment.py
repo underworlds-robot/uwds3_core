@@ -7,7 +7,7 @@ from scipy.spatial.distance import cosine
 
 class LinearAssignment(object):
 
-    def __init__(self, cost_metric, min_distance):
+    def __init__(self, cost_metric, min_distance=None):
         self.cost_metric = cost_metric
         self.min_distance = min_distance
 
@@ -23,7 +23,6 @@ class LinearAssignment(object):
         for d, det in enumerate(detections):
             for t, trk in enumerate(tracks):
                 C[d, t] = self.cost_metric(det, trk)
-
         # Run the optimization problem
         M = linear_assignment(C)
 
@@ -38,11 +37,14 @@ class LinearAssignment(object):
 
         matches = []
         for m in M:
-            if(C[m[0], m[1]] > self.min_distance):
-                unmatched_detections.append(m[0])
-                unmatched_tracks.append(m[1])
-            else:
+            if self.min_distance is None:
                 matches.append(m.reshape(1, 2))
+            else:
+                if(C[m[0], m[1]] > self.min_distance):
+                    unmatched_detections.append(m[0])
+                    unmatched_tracks.append(m[1])
+                else:
+                    matches.append(m.reshape(1, 2))
 
         if(len(matches) == 0):
             matches = np.empty((0, 2), dtype=int)
@@ -57,15 +59,20 @@ def iou_distance(track, detection):
     y_top_left = min(track.bbox.top(), detection.bbox.top())
     x_right_bottom = max(track.bbox.right(), detection.bbox.right())
     y_right_bottom = max(track.bbox.bottom(), detection.bbox.bottom())
-    intersection_area = dlib.rectangle(int(x_top_left), int(y_top_left), int(x_right_bottom), int(y_right_bottom)).area()
+    #intersection_area = dlib.rectangle(int(x_top_left), int(y_top_left), int(x_right_bottom), int(y_right_bottom)).area()
+    intersection_area = max(0, x_right_bottom - x_top_left + 1) * max(0, y_right_bottom - y_top_left + 1)
     track_area = track.bbox.area()
     detection_area = detection.bbox.area()
-    return intersection_area / float(track_area + detection_area)
+    return abs(1 - (intersection_area / float(track_area + detection_area - intersection_area)))
 
 
 def cosine_distance(track, detection):
     return cosine(track.feature, detection.feature)
 
+def overlap_ratio(track, detection):
+    track_area = track.bbox.area()
+    detection_area = detection.bbox.area()
+    return intersection_area/float(track_area + detection_area)
 
 def euler_distance(track, detection):
     t_cx, t_cy = track.bbox.center()

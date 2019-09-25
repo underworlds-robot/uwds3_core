@@ -43,6 +43,9 @@ class Track(object):
         self.max_disappeared = max_disappeared
         self.max_age = max_age
 
+        self.translation = None
+        self.rotation = None
+
         if feature is not None:
             self.feature = np.asarray(feature, dtype=np.float32)
         else:
@@ -91,6 +94,12 @@ class Track(object):
         elif self.state == TrackState.OCCLUDED:
             if self.since_update > self.max_age:
                 self.state = TrackState.DELETED
+
+    def is_perceived(self):
+        if not self.is_deleted():
+            return self.state != TrackState.OCCLUDED
+        else:
+            return False
 
     def is_confirmed(self):
         return self.state == TrackState.CONFIRMED or self.state == TrackState.OCCLUDED

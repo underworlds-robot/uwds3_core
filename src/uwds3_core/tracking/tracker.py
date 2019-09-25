@@ -6,7 +6,7 @@ from .linear_assignment import LinearAssignment, iou_distance, cosine_distance
 class Tracker(object):
     def __init__(self,
                  metric,
-                 min_distance=0.55,
+                 min_distance=0.5,
                  n_init=6,
                  max_disappeared=5,
                  max_age=8):
@@ -15,7 +15,7 @@ class Tracker(object):
         self.max_disappeared = max_disappeared
         self.max_age = max_age
         self.tracks = []
-        self.iou_assignment = LinearAssignment(metric, min_distance)
+        self.iou_assignment = LinearAssignment(metric, min_distance=min_distance)
 
     def update(self, rgb_image, detections):
         matches, unmatched_detections, unmatched_tracks = self.iou_assignment.match(self.tracks, detections)
@@ -51,3 +51,4 @@ class Tracker(object):
                                      self.max_disappeared,
                                      self.max_age,
                                      use_correlation_tracker=True))
+        return len(self.tracks)-1

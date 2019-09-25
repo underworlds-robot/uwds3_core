@@ -20,25 +20,11 @@ class FacialLandmarksEstimator(object):
     def __init__(self, shape_predictor_config_file):
         self.predictor = dlib.shape_predictor(shape_predictor_config_file)
 
-    def estimate(self, rgb_image, bbox):
+    def estimate(self, rgb_image, face_track):
+        bbox = face_track.bbox
         gray = cv2.cvtColor(rgb_image, cv2.COLOR_RGB2GRAY)
-        shape = self.predictor(gray, self.bb_to_rect(bbox))
-        return self.shape_to_np(shape)
-
-    def shape_to_np(self, shape, dtype="int"):
-        coords = np.zeros((68, 2), dtype=dtype)
+        shape = self.predictor(gray, dlib.rectangle(int(bbox.left()), int(bbox.top()), int(bbox.right()), int(bbox.bottom())))
+        coords = np.zeros((68, 2), dtype=int)
         for i in range(0, 68):
-            coords[i] = (shape.part(i).x, shape.part(i).y)
+            coords[i] = (int(shape.part(i).x), int(shape.part(i).y))
         return coords
-
-    def rect_to_bb(self, rect):
-        xmin = rect.left()
-        ymin = rect.top()
-        xmax = rect.right()
-        ymax = rect.bottom()
-        return (xmin, ymin, xmax, ymax)
-
-    def bb_to_rect(self, bbox):
-        xmin, ymin, xmax, ymax = bbox
-        rect = dlib.rectangle(xmin, ymin, xmax, ymax)
-        return rect
