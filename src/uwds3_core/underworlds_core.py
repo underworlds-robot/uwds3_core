@@ -144,7 +144,7 @@ class UnderworldsCore(object):
             object_detections = [d for d in detections if d.class_label not in self.body_parts]
 
             object_tracks = self.object_tracker.update(rgb_image, object_detections)
-            human_tracks = self.human_tracker.update(rgb_image, human_detections)
+            human_tracks = self.human_tracker.update(rgb_image, human_detections, self.camera_matrix, self.dist_coeffs)
 
             fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer1)
             detection_fps = "Detection and track fps : %0.4fhz" % fps
@@ -152,36 +152,41 @@ class UnderworldsCore(object):
 
 
             cv2.putText(viz_frame, detection_fps, (5, 25),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
-            for track in human_tracks:
-                if track.is_confirmed():
-                    tl_corner = (int(track.bbox.left()), int(track.bbox.top()))
-                    br_corner = (int(track.bbox.right()), int(track.bbox.bottom()))
-                    # if track.class_label == "face":
-                    #     shape = self.landmark_estimator.estimate(rgb_image, track)
-                    #     for (x, y) in shape:
-                    #         cv2.circle(viz_frame, (x, y), 1, (0, 255, 0), -1)
+            for track in self.human_tracker.tracks:
+                #if track.is_confirmed():
+                tl_corner = (int(track.bbox.left()), int(track.bbox.top()))
+                br_corner = (int(track.bbox.right()), int(track.bbox.bottom()))
+                # if track.class_label == "face":
+                #     shape = self.landmark_estimator.estimate(rgb_image, track)
+                #     for (x, y) in shape:
+                #         cv2.circle(viz_frame, (x, y), 1, (0, 255, 0), -1)
+                if track.class_label == "face":
+                    rot = track.rotation
+                    trans = track.translation
+                    #rot, trans = track.get_head_pose()
+                    if rot is not None and trans is not None:
+                        transform = geometry_msgs.msg.TransformStamped()
+                        transform.header.stamp = rospy.Time.now()
+                        transform.header.frame_id = self.camera_frame_id
+                        transform.child_frame_id = "gaze"
+                        transform.transform.translation.x = trans[0]
+                        transform.transform.translation.y = trans[1]
+                        transform.transform.translation.z = trans[2]
+                        q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
+                        transform.transform.rotation.x = q_rot[0]
+                        transform.transform.rotation.y = q_rot[1]
+                        transform.transform.rotation.z = q_rot[2]
+                        transform.transform.rotation.w = q_rot[3]
+                        self.tf_broadcaster.sendTransform(transform)
+                        if track.uuid not in self.internal_simulator:
+                            self.internal_simulator.load_urdf(track.uuid, "face.urdf", trans, q_rot)
+                        self.internal_simulator.update_entity(track.uuid, trans, q_rot)
+                        self.internal_simulator.get_human_visibilities(trans, q_rot)
+                        cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 0.03)
 
-                    rot, trans = track.get_head_pose()
-                    transform = geometry_msgs.msg.TransformStamped()
-                    transform.header.stamp = rospy.Time.now()
-                    transform.header.frame_id = self.camera_frame_id
-                    transform.child_frame_id = "gaze"
-                    transform.transform.translation.x = trans[0]
-                    transform.transform.translation.y = trans[1]
-                    transform.transform.translation.z = trans[2]
-                    q_rot = quaternion_from_euler(rot[0], rot[1], rot[2], "rxyz")
-                    transform.transform.rotation.x = q_rot[0]
-                    transform.transform.rotation.y = q_rot[1]
-                    transform.transform.rotation.z = q_rot[2]
-                    transform.transform.rotation.w = q_rot[3]
-                        #print transform
-                    self.tf_broadcaster.sendTransform(transform)
-                            #self.internal_simulator.get_human_visibilities(trans.reshape((3,)), q_rot)
-                    cv2.drawFrameAxes(viz_frame, self.camera_matrix, self.dist_coeffs, np.array(rot).reshape((3,1)), np.array(trans).reshape(3,1), 0.03)
 
-
-                    cv2.putText(viz_frame, track.uuid[:6], (tl_corner[0]+5, tl_corner[1]+25),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)
-                    cv2.putText(viz_frame, track.class_label, (tl_corner[0]+5, tl_corner[1]+45),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)
-                    cv2.rectangle(viz_frame, tl_corner, br_corner, (255, 255, 0), 2)
+                cv2.putText(viz_frame, track.uuid[:6], (tl_corner[0]+5, tl_corner[1]+25),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)
+                cv2.putText(viz_frame, track.class_label, (tl_corner[0]+5, tl_corner[1]+45),  cv2.FONT_HERSHEY_SIMPLEX, 0.5, (240, 0, 0), 2)
+                cv2.rectangle(viz_frame, tl_corner, br_corner, (255, 255, 0), 2)
             viz_img_msg = self.bridge.cv2_to_imgmsg(viz_frame)
             self.visualization_publisher.publish(viz_img_msg)

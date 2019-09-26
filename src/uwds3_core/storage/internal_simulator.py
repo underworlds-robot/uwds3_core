@@ -6,11 +6,30 @@ import time
 import tf2_ros
 import geometry_msgs
 import sensor_msgs
+from uwds3_core.utils.transformations import *
 from tf2_ros import Buffer, TransformListener
 from pybullet import JOINT_FIXED
 
 from image_geometry import PinholeCameraModel
+from cv_bridge import CvBridge
+import colorsys
 
+
+class HumanVisualModel(object):
+    FOV = 60.0 # human field of view
+    WIDTH = 10 # image width resolution for rendering
+    HEIGHT = 10  # image height resolution for rendering
+    CLIPNEAR = 0.3 # clipnear
+    CLIPFAR = 1e+3 # clipfar
+    ASPECT = 1.333 # aspect ratio for rendering
+    SACCADE_THRESHOLD = 0.01 # angular variation in rad/s
+    SACCADE_ESPILON = 0.005 # error in angular variation
+    FOCUS_DISTANCE_FIXATION = 0.1 # focus distance when performing a fixation
+    FOCUS_DISTANCE_SACCADE = 0.5 # focus distance when performing a saccade
+
+class HumanGazeState(object):
+    SACCADE = 0 #
+    FIXATION = 1 #
 
 class ObjectPhysicalState(object):
     INCONSISTENT = 0
@@ -60,6 +79,9 @@ class InternalSimulator(object):
         self.last_observation_time = None
         self.average_observation_duration = None
 
+        self.bridge = CvBridge()
+        self.visualization_publisher = rospy.Publisher("uwds3_core/debug_image", sensor_msgs.msg.Image, queue_size=1)
+
         # Setup the physics server
         use_gui = rospy.get_param("~use_gui", True)
         if use_gui is True:
@@ -84,7 +106,7 @@ class InternalSimulator(object):
 
         # Load the environment if any
         if self.env_sdf_file_path != "":
-            self.simulator_entity_id_map["env"] = p.loadSDF(self.env_sdf_file_path)
+            self.simulator_entity_id_map["env"] = p.loadURDF(self.env_sdf_file_path)
 
         self.robot_loaded = False
 
@@ -133,11 +155,11 @@ class InternalSimulator(object):
         #     p.resetBasePositionAndOrientation(base_link_sim_id, t, q)
         #     self.entities_state[id] = ObjectPhysicalState.INCONSISTENT
         # else:
-        t_current, q_current = p.getBasePositionAndOrientation(base_link_sim_id)
-        update_position = not np.allclose(t_current, t, atol=self.position_tolerance)
-        update_orientation = not np.allclose(q_current, q, atol=self.position_tolerance)
-        if update_position is True or update_orientation is True:
-            p.resetBasePositionAndOrientation(base_link_sim_id, t, q)
+        # t_current, q_current = p.getBasePositionAndOrientation(base_link_sim_id)
+        # update_position = not np.allclose(np.array(t_current), t, atol=self.position_tolerance)
+        # update_orientation = not np.allclose(np.array(q_current), q, atol=self.position_tolerance)
+        # if update_position is True or update_orientation is True:
+        p.resetBasePositionAndOrientation(base_link_sim_id, t, q)
         self.entities_state[id] = ObjectPhysicalState.PLAUSIBLE
         self.entities_last_update[id] = rospy.Time()
 
@@ -280,10 +302,50 @@ class InternalSimulator(object):
     #
     #     return point_clouds, center_element, center_point
     #
-    # def get_human_visibilities(self, t, q, focus_distance=1.0):
-    #     #camera_position = self.get_entity_position(id)
-    #     if self.camera_info_received is True:
-    #         flag, visibilities, _ = self.get_pointcloud_from_camera(t, q, 10, 8, 8)
-    #         return flag, visibilities
-    #     else:
-    #         return False, []
+    def get_human_visibilities(self, t, q, focus_distance=1.0):
+        if self.camera_info is not None:
+            visibilities = np.array([])
+            focus_3d_pt = None
+            #flag, visibilities, _ = self.get_pointcloud_from_camera(t, q, 10, 8, 8)
+            euler_angles = euler_from_quaternion(q, "rxyz")
+            #view_matrix = inverse_matrix(compose_matrix(angles=euler_angles, translate=t))
+            #view_matrix = p.computeViewMatrixFromYawPitchRoll(t, 1.0, euler_angles[2], euler_angles[1], euler_angles[0], 2)
+            view_matrix = p.computeViewMatrixFromYawPitchRoll([0,0,1], 1.0, 0, 0, 0, 2)
+            projection_matrix = p.computeProjectionMatrixFOV(HumanVisualModel.FOV,
+                                                             HumanVisualModel.ASPECT,
+                                                             HumanVisualModel.CLIPNEAR,
+                                                             HumanVisualModel.CLIPFAR)
+            # pinhole_camera_model = PinholeCameraModel()
+            # pinhole_camera_model.fromCameraInfo(self.camera_info)
+            # print view_matrix
+            #camera_image = p.getCameraImage(HumanVisualModel.WIDTH, HumanVisualModel.HEIGHT, viewMatrix=view_matrix, projectionMatrix=projection_matrix)#, renderer=p.ER_TINY_RENDERER)
+            camera_image = p.getCameraImage(HumanVisualModel.WIDTH, HumanVisualModel.HEIGHT, viewMatrix=view_matrix, projectionMatrix=projection_matrix)
+            # depth_map = camera_image[3]
+            # points = []
+            # center_u = int(HumanVisualModel.WIDTH/2.)
+            # center_v = int(HumanVisualModel.HEIGHT/2.)
+            # center_point = np.array(pinhole_camera_model.projectPixelTo3dRay((center_u, center_v))) * depth_map[center_v, center_u]
+            # viz_frame = np.zeros((HumanVisualModel.HEIGHT,HumanVisualModel.WIDTH,3), np.uint8)
+            # for v in range(HumanVisualModel.HEIGHT):
+            #     #v_norm = v / float(height)
+            #     for u in range(HumanVisualModel.WIDTH):
+            #         if u == center_u and v == center_v:
+            #             continue
+            #         object_id = camera_image[4][v, u]
+            #         pt3d = np.array(pinhole_camera_model.projectPixelTo3dRay((u, v))) * depth_map[v, u]
+            #         points.append(pt3d)
+            #         d = math.sqrt(np.sum((center_point - pt3d)**2)) # Euler distance
+            #         d_clipped = min(d, focus_distance)
+            #         d_norm = d_clipped / focus_distance
+            #         intensity = 1.0 - d_norm
+            #         (r, g, b) = colorsys.hsv_to_rgb(min(1.0-intensity, 0.8333), 1.0, 1.0)
+            #         viz_frame[v, u] = (b*255, g*255, r*255)
+            # print(viz_frame.shape)
+            # print(center_point)
+            # print(len(points))
+
+            viz_img_msg = self.bridge.cv2_to_imgmsg(camera_image[3])
+            self.visualization_publisher.publish(viz_img_msg)
+            return False, []
+        else:
+            return False, []

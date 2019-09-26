@@ -37,9 +37,13 @@ class CameraPublisher(object):
         camera_matrix = np.array([[focal_length, 0, center[0]],
                                  [0, focal_length, center[1]],
                                  [0, 0, 1]], dtype="double")
+        P_matrix = np.array([[focal_length, 0, center[0], 0],
+                                 [0, focal_length, center[1], 0],
+                                 [0, 0, 1, 0]], dtype="double")
         dist_coeffs = np.zeros((4,1))
         self.camera_info.D = list(dist_coeffs)
         self.camera_info.K = list(camera_matrix.flatten())
+        self.camera_info.P = list(P_matrix.flatten())
 
         self.timer = rospy.Timer(rospy.Duration(1.0/self.camera_pub_frequency), self.timer_callback)
         rospy.loginfo("Camera publisher ready !")

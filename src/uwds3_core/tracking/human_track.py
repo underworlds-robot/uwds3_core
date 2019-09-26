@@ -8,18 +8,21 @@ class HumanTrack(object):
     def __init__(self, person_track):
         self.uuid = str(uuid.uuid4())
         self.is_facing = False
+        self.class_label = "person"
+        self.bbox = person_track.bbox
         self.body_part_types = ["person", "face", "right_hand", "left_hand"]
         self.body_part_tracks = {}
         self.body_part_tracks["person"] = person_track
 
     def update_track(self, track_label, track):
+        if track_label == "person":
+            self.bbox = track.bbox
         self.body_part_tracks[track_label] = track
 
     def mark_missed(self, track_label=None):
         if track_label is None:
-            self.body_part_trackss["person"].mark_missed()
+            self.body_part_tracks["person"].mark_missed()
         else:
-            self.body_part_tracks[track_label].mark_missed()
             if self.body_part_tracks[track_label].is_deleted():
                 del self.body_part_tracks[track_label]
 

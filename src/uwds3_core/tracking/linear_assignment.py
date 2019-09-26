@@ -59,8 +59,8 @@ def iou_distance(track, detection):
     y_top_left = min(track.bbox.top(), detection.bbox.top())
     x_right_bottom = max(track.bbox.right(), detection.bbox.right())
     y_right_bottom = max(track.bbox.bottom(), detection.bbox.bottom())
-    #intersection_area = dlib.rectangle(int(x_top_left), int(y_top_left), int(x_right_bottom), int(y_right_bottom)).area()
-    intersection_area = max(0, x_right_bottom - x_top_left + 1) * max(0, y_right_bottom - y_top_left + 1)
+    intersection_area = dlib.rectangle(int(x_top_left), int(y_top_left), int(x_right_bottom), int(y_right_bottom)).area()
+    #intersection_area = max(0, x_right_bottom - x_top_left + 1) * max(0, y_right_bottom - y_top_left + 1)
     track_area = track.bbox.area()
     detection_area = detection.bbox.area()
     return abs(1 - (intersection_area / float(track_area + detection_area - intersection_area)))
@@ -75,6 +75,8 @@ def overlap_ratio(track, detection):
     return intersection_area/float(track_area + detection_area)
 
 def euler_distance(track, detection):
-    t_cx, t_cy = track.bbox.center()
-    d_cx, d_cy = detection.bbox.center()
+    t_cx = track.bbox.center().x
+    t_cy = track.bbox.center().y
+    d_cx = detection.bbox.center().x
+    d_cy = detection.bbox.center().y
     return math.sqrt(pow(t_cx-d_cx, 2)+pow(t_cy-d_cy, 2))
